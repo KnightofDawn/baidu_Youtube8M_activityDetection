@@ -56,10 +56,17 @@ class _codebook(object):
                     <bool> check_brightness
         '''
         brightness = 0
+
+        alpha = 0.5
+        beta  = 1.3
+
         if (np.empty(Imin) | np.empty(Imax)):
             return False
 
-        if (I>=Imin and I<=Imax):
+        I_low  = alpha*Imax
+        I_high = min(Imin/alpha, beta*Imax)
+
+        if (I>=I_low and I<=I_high):
             return True
         else:
             return False
@@ -96,7 +103,7 @@ class _codebook(object):
                     targt = video[n, x, y, :]
 
                     # I: intensity of this pixel...
-                    I = np.sum(targt)
+                    I = np.sum(np.power(targt,2))
 
                     indx = np.ravel_multi_index([x, y], [height, width])
 
