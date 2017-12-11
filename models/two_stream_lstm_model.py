@@ -15,6 +15,7 @@ class two_stream_lstm_model(object):
                                             'num_of_class': 4716,
                                             'model_dir':    "./two_stream_models",
                                             'data_dir':     "./data",
+                                            'log_dir':      "./log",
                                             'max_iteration': 1000000}):
 
         # parse the training parameters e.g. batch_size and base_learning_rate
@@ -34,6 +35,13 @@ class two_stream_lstm_model(object):
 
         # tf.session
         self.sess = sess
+
+        # !Check if log folder exists...
+        self.log_dir = train_params['log_dir']
+        if not os.path.exists(self.log_dir):
+            os.mkdir(self.log_dir)
+
+        self.log_dir = os.path.join(self.log_dir, 'two_stream_lstm_train')
 
         # build-up the two_stream_lstm_model
         self._build_model()
@@ -113,7 +121,7 @@ class two_stream_lstm_model(object):
                                                                                         batch_size=self.batch_size,
                                                                                         capacity=self.batch_size*5,
                                                                                         min_after_dequeue=1,
-                                                                                        allow_smaller_final_batch=True)
+                                                                                        allow_smaller_final_batch=False)
 
         return rgb_batch, audio_batch, labels_batch, video_id_batch
 
@@ -374,7 +382,7 @@ class two_stream_lstm_model(object):
         # define classifier and loss layer i.e. 2-layer fc + sigmoid + multi-label-crossEntropy ...
         self.loss = self._fc2_multiLabel_classifier(inp_feat=aggt_feat, label=self.label, num_of_outputs_fc1=4096, num_of_outputs_fc2=2048, name_scope='loss')
 
-
+        tf.summary.scalar('multi_label_cross_entropy_loss', self.loss)
 
 
 
@@ -397,6 +405,8 @@ class two_stream_lstm_model(object):
         threads = tf.train.start_queue_runners(sess=self.sess, coord=coord)
 
 
+        # !Merge all summaries in Graph...
+        merge_summary = tf.summary.merge_all()
 
 
         try:
@@ -406,19 +416,50 @@ class two_stream_lstm_model(object):
                     rgb, audio, label, video_id = self.sess.run([rgb_batch, audio_batch, labels_batch, videos_id_batch])
 
                     # !Execute training operations...
-                    _, err = self.sess.run([self.train_op, self.loss], feed_dict={self.rgb_feat: rgb, self.audio_feat: audio, self.label:label})
+                    _, err, summary = self.sess.run([self.train_op, self.loss, merge_summary], feed_dict={self.rgb_feat: rgb, self.audio_feat: audio, self.label:label})
                     print('!Loss of No.%d Iteration=%f' % (iter, err))
+
+                    # !Run summary and write summaries into local log file...
+                    tf.summary.FileWriter(self.log_dir).add_summary(summary, iter)
+
 
         except tf.errors.OutOfRangeError:
             print('!Frame-level Feature read completed...')
+            tf.summary.FileWriter(self.log_dir).close()
         finally:
             coord.request_stop()
             coord.join(threads=threads)
 
+            self.sess.close()
 
-    # def _test_phase(self):
+    # def _test_phase(self, iter_step):
 
-    # def _save_model(self):
 
-    # def _load_model(self):
+
+
+    def _save_model(self, iter_step):
+        '''
+            Function:
+                        _save_model, i.e. save model parameters of No.iter_step into self.model_dir
+            Input:
+                        <int> iter_step
+        '''
+
+        model_name = 'two_stream_lstm'
+
+        #!Check if the self.model_dir exists...
+        if not os.path.exists(self.model_dir):
+            os.mkdir(self.model_dir)
+
+        tf.train.Saver().save(sess=self.sess,
+                              save_path=os.path.join(self.model_dir, model_name),
+                              global_step=iter_step)
+
+
+
+
+    # def _load_model(self, iter_step):
+
+
+
 
